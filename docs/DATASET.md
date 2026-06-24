@@ -58,5 +58,12 @@ Our research identified exactly three programmatic classes of honeypot profiles:
   $$\exists j \in \text{CareerHistory} \mid \text{TenureMonths}_j > \left( \text{YearsOfExperience} \times 12 + 6 \right)$$
 * **Count**: Exactly 21 candidates match this pattern.
 
+### Class 4: Modern Framework Age Mismatch
+* **The Anomaly**: Candidates claiming extensive tenures in recently-released frameworks or methodologies.
+* **The Impossibility**: A candidate cannot have 7.3 years (88 months) of experience in Pinecone (founded 2019, launched 2021) or LoRA (published 2021).
+* **Detection Rule**:
+  $$\exists s \in \text{Skills} \mid \text{Name}_s \in \{\text{"Pinecone"}, \text{"LoRA"}, \text{"Fine-tuning LLMs"}, \text{"Weights & Biases"}, \text{"RAG"}\} \land \text{DurationMonths}_s > 60$$
+* **Count**: Exactly 70 candidates match this pattern.
+
 ### Total Disqualified Pool
-The union of these three programmatic classes yields **exactly 126 candidates** out of the 100,000 pool. Our ranker sets the score of any candidate matching these rules to $0.0$ and discards them from ranking consideration, guaranteeing a **$0\%$ honeypot rate** in the top 100.
+The union of these four programmatic classes yields **exactly 193 candidates** out of the 100,000 pool. Our ranker sets the score of any candidate matching these rules to $0.0$ and discards them from ranking consideration, guaranteeing a **$0\%$ honeypot rate** in the top 100.
