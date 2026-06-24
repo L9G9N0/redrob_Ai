@@ -117,6 +117,16 @@ def check_honeypots(candidate):
         if dur > (years_exp * 12 + 6):
             return True
 
+    # Honeypot Check 4: Modern framework duration exceeds the framework's actual existence
+    # Pinecone, LoRA, Fine-tuning LLMs, Weights & Biases, and RAG are post-2020/2021 tech.
+    # Anyone claiming >60 months (5 years) of experience in these is a honeypot.
+    modern_frameworks = {"Pinecone", "LoRA", "Fine-tuning LLMs", "Weights & Biases", "RAG"}
+    for s in skills:
+        name = s.get("name")
+        dur = s.get("duration_months", 0)
+        if name in modern_frameworks and dur > 60:
+            return True
+
     # Basic check: invalid experience
     if years_exp < 0:
         return True

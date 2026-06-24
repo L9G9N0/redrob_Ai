@@ -70,6 +70,18 @@ class TestHoneypots(unittest.TestCase):
         }
         self.assertTrue(check_honeypots(candidate))
 
+    def test_modern_framework_age_honeypot(self):
+        # Candidate has 88 months (7.3 years) of experience in Pinecone (founded 2019, launched 2021)
+        candidate = {
+            "candidate_id": "CAND_0000005",
+            "profile": {"years_of_experience": 10.0},
+            "skills": [
+                {"name": "Pinecone", "proficiency": "expert", "duration_months": 88}
+            ],
+            "career_history": []
+        }
+        self.assertTrue(check_honeypots(candidate))
+
 
 class TestScoring(unittest.TestCase):
     """Unit tests for individual feature scoring and availability multipliers."""
