@@ -373,61 +373,102 @@ def score_candidate(c):
 def generate_reasoning(rank, score, info):
     """
     Synthesize natural language justification for the candidate match
-    according to rank bands to maintain consistency and variation.
+    dynamically without rigid templates, avoiding empty brackets.
     """
-    core_skills_str = ", ".join(info["core_skills"]) if info["core_skills"] else ""
-    adj_skills_str = ", ".join(info["adj_skills"]) if info["adj_skills"] else ""
-    
     years = info["years_exp"]
     title = info["current_title"] if info["current_title"] else "ML Professional"
     
-    # Perfect Fits (Ranks 1 - 10)
-    if rank <= 10:
-        templates = [
-            f"Founding-caliber {title} with {years:.1f} yrs experience; strong fit on Core ML/Retrieval (shipped {core_skills_str}). High platform activity.",
-            f"Excellent fit with {years:.1f} yrs experience; demonstrated production track record in {core_skills_str} at product firms. Local to Pune/Noida.",
-            f"Strong technical lead matching the product-focused AI role. Shipped {core_skills_str} with {years:.1f} yrs exp and high platform responsiveness."
-        ]
-        return templates[rank % len(templates)]
-        
-    # High Fits (Ranks 11 - 35)
-    elif rank <= 35:
-        if info["notice_days"] > 60:
-            return f"Strong technical match ({years:.1f} yrs, expert in {core_skills_str}) but notice period ({info['notice_days']} days) is a minor concern."
-        if info["has_consulting"]:
-            return f"Capable {title} with {years:.1f} yrs experience; has consulting history at {info['consulting_name']} but possesses high-fit core AI skills: {core_skills_str}."
-        
-        templates = [
-            f"Experienced {title} ({years:.1f} yrs) with core alignment in NLP & search ({core_skills_str}); local to Noida/Pune region.",
-            f"{years:.1f} yrs exp. Shipped {core_skills_str} with adjacent {adj_skills_str} skills; strong alignment with startup product engineering values."
-        ]
-        return templates[rank % len(templates)]
-        
-    # Medium Fits (Ranks 36 - 70)
-    elif rank <= 70:
-        if info["all_consulting"]:
-            return f"{years:.1f} yrs experience matching core skills ({core_skills_str}); consulting background is a concern but technical score warrants selection."
-        if not info["is_local"] and info["relocate"]:
-            return f"Competent AI practitioner with {years:.1f} yrs experience matching {core_skills_str}. Relocating from Tier-1 city."
-            
-        templates = [
-            f"{years:.1f} yrs experience as {title}. Matches core skills ({core_skills_str}) but lower recent activity on platform.",
-            f"Solid ML engineer with {years:.1f} yrs exp. Solid in adjacent engineering ({adj_skills_str}) with relevant AI foundations."
-        ]
-        return templates[rank % len(templates)]
-        
-    # Borderline/Filler (Ranks 71 - 100)
+    # 1. Core Identity & Company Profile (Module A)
+    # Vary the opener based on candidate parameters to avoid duplicate phrasing
+    intro_hash = hash(str(years) + title + str(rank)) % 3
+    if intro_hash == 0:
+        intro = f"{title} offering {years:.1f} years of experience"
+    elif intro_hash == 1:
+        intro = f"{years:.1f}-year engineering professional currently working as {title}"
     else:
-        if info["years_exp"] < 4.0:
-            return f"Emerging {title} with {years:.1f} yrs exp; strong skill trajectory in {core_skills_str} but lower experience tier than preferred."
-        if info["years_exp"] > 12.0:
-            return f"Senior ML leader with {years:.1f} yrs experience; likely overqualified but included due to strong core {core_skills_str} alignment."
-            
-        templates = [
-            f"Adjacent engineering background ({adj_skills_str}) with {years:.1f} yrs experience. Technical alignment is modest but behavioral signals are excellent.",
-            f"{years:.1f} yrs experience; modest skill overlaps in {core_skills_str} but high availability and strong local location fit."
-        ]
-        return templates[rank % len(templates)]
+        intro = f"Senior {title} with a {years:.1f}-year professional track record"
+        
+    # Append company type contexts
+    if info["all_consulting"]:
+        intro += f", transitioning from service firms (specifically {info['consulting_name']})"
+    elif info["has_consulting"]:
+        intro += f", carrying a mixed background from consulting ({info['consulting_name']}) and product development"
+    else:
+        intro += ", offering strong software development background at product companies"
+
+    # 2. Technical Alignment (Module B)
+    # Safe checks to prevent empty parentheses '()'
+    core_skills_str = ", ".join(info["core_skills"]) if info["core_skills"] else ""
+    adj_skills_str = ", ".join(info["adj_skills"]) if info["adj_skills"] else ""
+    
+    skills_hash = hash(core_skills_str + adj_skills_str + str(rank)) % 3
+    
+    if core_skills_str and adj_skills_str:
+        if skills_hash == 0:
+            tech = f". Demonstrates hands-on knowledge in {core_skills_str}, backed by solid adjacent depth in {adj_skills_str}."
+        elif skills_hash == 1:
+            tech = f". Experienced in core competencies like {core_skills_str} alongside adjacent engineering skills including {adj_skills_str}."
+        else:
+            tech = f". Technical toolkit spans core ML architectures like {core_skills_str} and backend infra tools such as {adj_skills_str}."
+    elif core_skills_str:
+        if skills_hash == 0:
+            tech = f". Aligns directly with JD core skills, specifically showing depth in {core_skills_str}."
+        else:
+            tech = f". Technical background indicates specialized experience with {core_skills_str}."
+    elif adj_skills_str:
+        if skills_hash == 0:
+            tech = f". Displays general engineering foundations in {adj_skills_str}, though direct vector-database experience is limited."
+        else:
+            tech = f". Toolkit centers on adjacent engineering systems like {adj_skills_str}, providing a strong transition baseline."
+    else:
+        tech = ". Offers general software development skills, though direct ML infrastructure exposure is limited."
+
+    # 3. Constraints & Availability (Module C)
+    notice = info["notice_days"]
+    reloc = info["relocate"]
+    local = info["is_local"]
+    resp = info["resp_rate"]
+    
+    behavior_clauses = []
+    
+    # Notice Period
+    if notice > 60:
+        behavior_clauses.append(f"notice period of {notice} days is a concern")
+    elif notice <= 30:
+        behavior_clauses.append("availability is ideal (notice period under 30 days)")
+        
+    # Location
+    if local:
+        behavior_clauses.append("based locally in Pune/Noida")
+    elif reloc:
+        behavior_clauses.append("willing to relocate to Pune/Noida")
+        
+    # Responsiveness
+    if resp < 0.3:
+        behavior_clauses.append(f"historical response rate ({resp:.0%}) is low")
+    elif resp >= 0.8:
+        behavior_clauses.append("highly responsive on the platform")
+        
+    if behavior_clauses:
+        behavior_hash = hash(str(rank) + str(score)) % 2
+        if behavior_hash == 0:
+            behavior = f". Operational notes: {', '.join(behavior_clauses)}."
+        else:
+            behavior = f". In terms of feasibility: {', '.join(behavior_clauses)}."
+    else:
+        behavior = "."
+
+    # 4. Assemble and clean spacing/punctuation
+    reasoning = f"{intro}{tech}{behavior}"
+    reasoning = reasoning.replace("..", ".").replace(" .", ".").replace(" ,", ",").replace("  ", " ").strip()
+    
+    # Add rank-specific context prefixes
+    if rank <= 10:
+        reasoning = f"Top-tier recommendation: {reasoning}"
+    elif rank > 80:
+        reasoning = f"Borderline select: {reasoning}"
+        
+    return reasoning
 
 # ----------------------------------------------------------------------
 # Main Execution Pipeline
