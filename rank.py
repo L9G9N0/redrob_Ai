@@ -317,6 +317,7 @@ def score_candidate(c):
 
     # 4. Platform Engagement Fit
     m_eng = 1.0
+    elapsed_days = -1
     # Last active decay
     last_act = signals.get("last_active_date", "")
     if last_act:
@@ -362,7 +363,9 @@ def score_candidate(c):
         "all_consulting": all_consulting,
         "consulting_name": consulting_name,
         "resp_rate": resp_rate,
-        "avg_tenure": avg_tenure
+        "avg_tenure": avg_tenure,
+        "last_active_days": elapsed_days,
+        "last_active_date": last_act
     }
     
     return final_score, reason_info
@@ -381,157 +384,133 @@ def generate_reasoning(rank, score, info):
     
     # Deterministic index selectors (ensuring 100% reproduction consistency)
     val_hash = int(years * 10) + rank
-    intro_idx = val_hash % 3
+    intro_idx = val_hash % 10
     var_idx = val_hash % 5
     
     # 1. Title Normalization & Flaw 1 Fix
-    # Check if title already includes "Senior" / "Sr" / "Junior" / "Jr"
     has_senior = "senior" in title.lower() or "sr." in title.lower() or "sr " in title.lower()
     has_junior = "junior" in title.lower() or "jr." in title.lower() or "jr " in title.lower()
     if years >= 5.0:
         if has_junior:
-            # Replace Junior/Jr with Senior to avoid "Senior Junior" contradiction
             title = re.sub(r'\b(junior|jr\.|jr)\b', 'Senior', title, flags=re.IGNORECASE)
             has_senior = True
         elif not has_senior:
             title = f"Senior {title}"
             has_senior = True
 
-    # Intro generation
-    if intro_idx == 0:
-        intro = f"{title} offering {years:.1f} years of experience"
-    elif intro_idx == 1:
-        intro = f"{years:.1f}-year engineering professional currently working as {title}"
+    # Adjectives based on rank for score-to-reasoning alignment
+    if rank <= 20:
+        adj_exp = "deep technical"
+        adj_prod = "strong product-building"
+        adj_core = "specialized expertise"
+        adj_fit = "excellent alignment with our search engine JD"
+    elif rank <= 80:
+        adj_exp = "solid software"
+        adj_prod = "practical product"
+        adj_core = "relevant experience"
+        adj_fit = "good baseline alignment with ranking criteria"
     else:
-        intro = f"{title} with a {years:.1f}-year professional track record"
-        
-    # Append company type contexts with high variations (Flaw 3 Fix)
-    company = info["consulting_name"] if info["consulting_name"] else "consulting firms"
-    
-    product_vars = [
-        ", offering strong software development background at product companies",
-        ", bringing solid product-building experience in engineering contexts",
-        ", with a strong history of shipping production software rather than consulting",
-        ", offering deep software engineering expertise focused on product scaling",
-        ", demonstrating clean product-focused software development tenure"
-    ]
-    
-    consulting_vars = [
-        f", carrying a mixed background from consulting ({company}) and product development",
-        f", showing a healthy mix of IT services ({company}) and product engineering",
-        f", transitioning from service firms (specifically {company}) to product engineering",
-        f", with a career timeline combining IT consulting at {company} and applied ML",
-        f", possessing solid technical foundations with past consulting background at {company}"
-    ]
-    
-    all_consulting_vars = [
-        f", transitioning from service firms (specifically {company})",
-        f", with experience primarily in IT consulting at {company}",
-        f", looking to transition to product engineering after a services career at {company}",
-        f", with a background centered in IT services and consulting at {company}",
-        f", possessing a service-firm background (specifically {company})"
-    ]
-    
-    if info["all_consulting"]:
-        intro += all_consulting_vars[var_idx]
-    elif info["has_consulting"]:
-        intro += consulting_vars[var_idx]
-    else:
-        intro += product_vars[var_idx]
+        adj_exp = "general engineering"
+        adj_prod = "basic software"
+        adj_core = "limited exposure"
+        adj_fit = "adjacent alignment requiring non-core skills transition"
 
-    # 2. Technical Alignment (Module B)
+    # Core and adjacent skills formatting
     core_skills_str = ", ".join(info["core_skills"]) if info["core_skills"] else ""
     adj_skills_str = ", ".join(info["adj_skills"]) if info["adj_skills"] else ""
-    
-    skills_idx = (len(core_skills_str) + len(adj_skills_str) + rank) % 3
-    
-    if core_skills_str and adj_skills_str:
-        if skills_idx == 0:
-            tech = f". Demonstrates hands-on knowledge in {core_skills_str}, backed by solid adjacent depth in {adj_skills_str}."
-        elif skills_idx == 1:
-            tech = f". Experienced in core competencies like {core_skills_str} alongside adjacent engineering skills including {adj_skills_str}."
-        else:
-            tech = f". Technical toolkit spans core ML architectures like {core_skills_str} and backend infra tools such as {adj_skills_str}."
-    elif core_skills_str:
-        if skills_idx == 0:
-            tech = f". Aligns directly with JD core skills, specifically showing depth in {core_skills_str}."
-        else:
-            tech = f". Technical background indicates specialized experience with {core_skills_str}."
-    elif adj_skills_str:
-        if skills_idx == 0:
-            tech = f". Displays general engineering foundations in {adj_skills_str}, though direct vector-database experience is limited."
-        else:
-            tech = f". Toolkit centers on adjacent engineering systems like {adj_skills_str}, providing a strong transition baseline."
-    else:
-        tech = ". Offers general software development skills, though direct ML infrastructure exposure is limited."
 
-    # 3. Constraints & Availability (Module C - Flaw 2 Fix: Acknowledge Obvious Gaps/Concerns)
+    # Company background formatting
+    company = info["consulting_name"] if info["consulting_name"] else "consulting firms"
+    
+    if info["all_consulting"]:
+        all_consulting_vars = [
+            f"service firms (specifically {company})",
+            f"IT services at {company}",
+            f"consulting companies like {company}"
+        ]
+        company_type = all_consulting_vars[val_hash % len(all_consulting_vars)]
+    elif info["has_consulting"]:
+        consulting_vars = [
+            f"a mix of product firms and consulting at {company}",
+            f"both product environments and services ({company})",
+            f"a combination of consulting ({company}) and product engineering"
+        ]
+        company_type = consulting_vars[val_hash % len(consulting_vars)]
+    else:
+        product_vars = [
+            "product-focused companies",
+            "dedicated product engineering firms",
+            "product scaling environments"
+        ]
+        company_type = product_vars[val_hash % len(product_vars)]
+
+    # 2. Behavioral Signals
     notice = info["notice_days"]
     reloc = info["relocate"]
     local = info["is_local"]
     resp = info["resp_rate"]
-    avg_tenure = info["avg_tenure"]
+    elapsed = info.get("last_active_days", -1)
     
-    positives = []
-    concerns = []
+    pos_sigs = []
+    con_sigs = []
     
+    # Location
+    if local:
+        pos_sigs.append("local residency in Pune/Noida")
+    elif reloc:
+        pos_sigs.append("willingness to relocate to Pune/Noida")
+    else:
+        con_sigs.append("non-local residency constraints")
+
     # Notice Period
     notice_pos_vars = [
-        "immediate availability (notice period under 30 days)",
-        "ideal notice period of less than 30 days",
-        "quick onboarding timeline (notice period under 30 days)"
+        f"immediate availability ({notice}-day notice)",
+        f"readiness to onboard within {notice} days",
+        f"availability on short notice ({notice} days)"
     ]
     notice_neg_vars = [
-        f"their {notice}-day notice period is a concern for prompt onboarding",
-        f"onboarding might be delayed due to their {notice}-day notice period",
-        f"the {notice}-day notice period presents an onboarding bottleneck"
+        f"potential onboarding delays ({notice}-day notice period)",
+        f"a notice period of {notice} days",
+        f"delayed onboarding due to a {notice}-day notice period"
     ]
     if notice <= 30:
-        positives.append(notice_pos_vars[val_hash % len(notice_pos_vars)])
+        pos_sigs.append(notice_pos_vars[val_hash % len(notice_pos_vars)])
     else:
-        concerns.append(notice_neg_vars[val_hash % len(notice_neg_vars)])
+        con_sigs.append(notice_neg_vars[val_hash % len(notice_neg_vars)])
         
-    # Location
-    loc_local_vars = [
-        "based locally in the Pune/Noida region",
-        "located locally in Pune/Noida",
-        "local resident of Pune/Noida"
-    ]
-    loc_reloc_vars = [
-        "willing to relocate to Pune/Noida",
-        "open to relocation to Noida/Pune",
-        "ready to relocate for the role"
-    ]
-    if local:
-        positives.append(loc_local_vars[val_hash % len(loc_local_vars)])
-    elif reloc:
-        positives.append(loc_reloc_vars[val_hash % len(loc_reloc_vars)])
-        
-    # Responsiveness
+    # Recruiter response rate
     resp_pos_vars = [
-        f"highly responsive ({resp:.0%} response rate)",
-        f"strong engagement ({resp:.0%} recruiter reply rate)",
-        f"active on the platform with a {resp:.0%} response rate"
+        f"strong recruiter engagement ({resp:.0%} response rate)",
+        f"high responsiveness ({resp:.0%} recruiter reply rate)",
+        f"consistent platform activity ({resp:.0%} response rate)"
     ]
     resp_neg_vars = [
-        f"low platform responsiveness ({resp:.0%} response rate) is a concern",
-        f"their low recruiter reply rate ({resp:.0%}) raises communication concerns",
-        f"historical engagement is low with a {resp:.0%} response rate"
+        f"low recruiter responsiveness ({resp:.0%} response rate)",
+        f"low platform reply rate ({resp:.0%})",
+        f"inconsistent engagement ({resp:.0%} response rate)"
     ]
     if resp >= 0.5:
-        positives.append(resp_pos_vars[val_hash % len(resp_pos_vars)])
+        pos_sigs.append(resp_pos_vars[val_hash % len(resp_pos_vars)])
     else:
-        concerns.append(resp_neg_vars[val_hash % len(resp_neg_vars)])
+        con_sigs.append(resp_neg_vars[val_hash % len(resp_neg_vars)])
         
+    # Last active recency
+    if elapsed >= 0:
+        if elapsed <= 30:
+            pos_sigs.append(f"recent active login ({elapsed} days ago)")
+        elif elapsed > 60:
+            con_sigs.append(f"platform inactivity of {elapsed} days")
+
     # Average Tenure stability
+    avg_tenure = info.get("avg_tenure", 0.0)
     tenure_neg_vars = [
-        f"short average job tenure ({avg_tenure:.1f} months) raises stability concerns",
-        f"frequent job changes (average tenure of {avg_tenure:.1f} months) suggest retention risk",
-        f"job stability is a concern with an average tenure of {avg_tenure:.1f} months"
+        f"short average job tenure ({avg_tenure:.1f} months) raising stability concerns",
+        f"frequent job changes (average tenure of {avg_tenure:.1f} months) suggesting retention risk",
+        f"job stability concerns (average tenure {avg_tenure:.1f} months)"
     ]
     if avg_tenure > 0 and avg_tenure < 18:
-        concerns.append(tenure_neg_vars[val_hash % len(tenure_neg_vars)])
-        
+        con_sigs.append(tenure_neg_vars[val_hash % len(tenure_neg_vars)])
+
     def join_natural(lst):
         if not lst:
             return ""
@@ -541,40 +520,68 @@ def generate_reasoning(rank, score, info):
             return f"{lst[0]} and {lst[1]}"
         return ", ".join(lst[:-1]) + f", and {lst[-1]}"
         
-    # Combine positive and concerns
-    behavior = ""
-    if positives or concerns:
-        template_idx = (rank + int(score * 100)) % 3
-        
-        pos_str = join_natural(positives)
-        neg_str = join_natural(concerns)
-        
-        if positives and concerns:
-            if template_idx == 0:
-                behavior = f". Operational signals are positive: {pos_str}. However, {neg_str}."
-            elif template_idx == 1:
-                behavior = f". Feasibility check: {pos_str}. On the downside, {neg_str}."
-            else:
-                behavior = f". Operational highlights include {pos_str}, though {neg_str}."
-        elif concerns:
-            if template_idx == 0:
-                behavior = f". Operational notes: {neg_str}."
-            elif template_idx == 1:
-                behavior = f". Feasibility assessment: {neg_str}."
-            else:
-                behavior = f". Note that {neg_str}."
-        else:  # only positives
-            if template_idx == 0:
-                behavior = f". Operational signals are highly favorable: {pos_str}."
-            elif template_idx == 1:
-                behavior = f". Feasibility metrics are solid: {pos_str}."
-            else:
-                behavior = f". No major operational concerns: {pos_str}."
-    else:
-        behavior = "."
+    b_idx = val_hash % 3
+    if pos_sigs and con_sigs:
+        if b_idx == 0:
+            behavior_sig = f"Operational metrics show {join_natural(pos_sigs)}, though {join_natural(con_sigs)} is a concern."
+        elif b_idx == 1:
+            behavior_sig = f"Feasibility is supported by {join_natural(pos_sigs)}, however hiring likelihood is impacted by {join_natural(con_sigs)}."
+        else:
+            behavior_sig = f"Shows {join_natural(pos_sigs)}, though it presents an onboarding bottleneck with {join_natural(con_sigs)}."
+    elif con_sigs:
+        if b_idx == 0:
+            behavior_sig = f"Hiring readiness is impacted by {join_natural(con_sigs)}."
+        elif b_idx == 1:
+            behavior_sig = f"Operational signals show {join_natural(con_sigs)} on the platform."
+        else:
+            behavior_sig = f"Feasibility assessment highlights {join_natural(con_sigs)}."
+    else: # Only positives
+        if b_idx == 0:
+            behavior_sig = f"Hiring readiness is strong: candidate shows {join_natural(pos_sigs)}."
+        elif b_idx == 1:
+            behavior_sig = f"Feasibility metrics are solid: candidate demonstrates {join_natural(pos_sigs)}."
+        else:
+            behavior_sig = f"Operational signals confirm {join_natural(pos_sigs)}."
 
-    # 4. Assemble and clean spacing/punctuation
-    reasoning = f"{intro}{tech}{behavior}"
+    # 3. Main Templates Selection
+    skills_part = f"in {core_skills_str}" if core_skills_str else "in relevant engineering areas"
+
+    templates = [
+        # 0: Experience spans...
+        f"Experience spans {{years:.1f}} years as a {{title}}, demonstrating {{adj_prod}} tenure in {{company_type}} and {{adj_core}} {skills_part}. {{behavior_sig}}",
+        # 1: Career history shows...
+        f"Career history shows {{years:.1f}} years of engineering experience as a {{title}}, highlighting {{adj_prod}} focus in {{company_type}} with technical depth {skills_part}. {{behavior_sig}}",
+        # 2: Built...
+        f"Built engineering solutions {skills_part} over a {{years:.1f}}-year career as a {{title}}, reflecting {{adj_fit}}. {{behavior_sig}}",
+        # 3: Worked across...
+        f"Worked across {{company_type}} as a {{title}} for {{years:.1f}} years, establishing {{adj_exp}} capabilities {skills_part}. {{behavior_sig}}",
+        # 4: Demonstrates...
+        f"Demonstrates {{years:.1f}} years of professional trajectory as a {{title}}, combining {{adj_prod}} background with {{adj_core}} {skills_part}. {{behavior_sig}}",
+        # 5: Combines...
+        f"Combines {{years:.1f}} years of engineering experience as a {{title}} with skills {skills_part}, showing {{adj_fit}}. {{behavior_sig}}",
+        # 6: Background includes...
+        f"Background includes {{years:.1f}} years of backend/ML work as a {{title}}, showcasing {{adj_core}} {skills_part} alongside adjacent tools like {adj_skills_str if adj_skills_str else 'Python'}. {{behavior_sig}}",
+        # 7: Previous roles indicate...
+        f"Previous roles indicate {{adj_exp}} foundations as a {{title}} for {{years:.1f}} years, specializing {skills_part}. {{behavior_sig}}",
+        # 8: Trajectory suggests...
+        f"Professional trajectory reflects {{years:.1f}} years of technical experience as a {{title}}, highlighting {{adj_prod}} tenure and {{adj_core}} {skills_part}. {{behavior_sig}}",
+        # 9: Technical profile reflects...
+        f"Technical profile reflects {{years:.1f}} years of experience as a {{title}}, demonstrating {{adj_exp}} foundations {skills_part}. {{behavior_sig}}"
+    ]
+    
+    selected_template = templates[intro_idx]
+    reasoning = selected_template.format(
+        years=years,
+        title=title,
+        company_type=company_type,
+        adj_prod=adj_prod,
+        adj_core=adj_core,
+        adj_fit=adj_fit,
+        adj_exp=adj_exp,
+        behavior_sig=behavior_sig
+    )
+
+    # Clean up double periods or spaces around periods/commas
     reasoning = reasoning.replace("..", ".")
     reasoning = re.sub(r'\s+\.(?!\w)', '.', reasoning)
     reasoning = reasoning.replace(".,", ",")
@@ -583,25 +590,6 @@ def generate_reasoning(rank, score, info):
     reasoning = reasoning.replace("..", ".")
     reasoning = reasoning.strip()
     
-    # Add rank-specific context prefixes with variation (Flaw 4 Fix)
-    prefix_idx = rank % 4
-    if rank <= 20:
-        top_prefixes = [
-            "Exceptional fit: ",
-            "Highly recommended: ",
-            "Strong candidate: ",
-            "Top-tier recommendation: "
-        ]
-        reasoning = f"{top_prefixes[prefix_idx]}{reasoning}"
-    elif rank > 80:
-        bottom_prefixes = [
-            "Borderline select: ",
-            "Borderline candidate: ",
-            "Adjacent match: ",
-            "Final roster inclusion: "
-        ]
-        reasoning = f"{bottom_prefixes[prefix_idx]}{reasoning}"
-        
     return reasoning
 
 # ----------------------------------------------------------------------

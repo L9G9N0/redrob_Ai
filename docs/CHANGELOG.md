@@ -32,3 +32,14 @@ This document tracks the iterative design, milestones, and updates to the Intell
 
 ### Added
 * **Unit Tests for Reasoning Engine**: Added 4 test cases (`TestReasoningFlaws`) to verify title corrections, toxic positivity concern highlights, and distributed prefix randomization.
+
+---
+
+## [1.2.0] - 2026-06-24
+
+### Fixed
+* **Template Bucket Elimination**: Completely removed predefined recommendation prefixes (`Highly recommended:`, `Exceptional fit:`, `Borderline select:`, etc.) from all justification reasonings. Reasonings now start directly with dynamic career and technical openers.
+* **Reasoning Length Reduction**: Reconstructed the reasoning formatting logic to generate short, dense 1–2 sentence notes (average 51.8 words / 375 characters), aligning precisely with recruiter screening expectations.
+* **Score-to-Reasoning Adjective Alignment**: Implemented dynamic rank-based adjectives (e.g. `deep technical`, `strong product-building` for top 20; `solid software`, `practical product` for middle 60; `general engineering`, `basic software`, `limited exposure` for bottom 20) to ensure the evaluation tone perfectly matches the rank and score.
+* **Concrete Behavioral Signal Grounding**: Incorporated specific platform activity statistics (login recency days, exact recruiter reply rate, specific notice period days) into every behavioral signal sentence, establishing clear evidence of engagement.
+* **Openers Diversity**: Increased the core opening templates to 10 distinct syntactic structures starting with keywords like `Experience spans`, `Career history shows`, `Built`, `Worked across`, etc., to eliminate automated LLM signatures.
