@@ -10,6 +10,7 @@ import csv
 import json
 import re
 import sys
+import random
 from datetime import datetime
 
 # ----------------------------------------------------------------------
@@ -378,95 +379,228 @@ def generate_reasoning(rank, score, info):
     years = info["years_exp"]
     title = info["current_title"] if info["current_title"] else "ML Professional"
     
-    # 1. Core Identity & Company Profile (Module A)
-    # Vary the opener based on candidate parameters to avoid duplicate phrasing
-    intro_hash = hash(str(years) + title + str(rank)) % 3
-    if intro_hash == 0:
+    # Deterministic index selectors (ensuring 100% reproduction consistency)
+    val_hash = int(years * 10) + rank
+    intro_idx = val_hash % 3
+    var_idx = val_hash % 5
+    
+    # 1. Title Normalization & Flaw 1 Fix
+    # Check if title already includes "Senior" / "Sr" / "Junior" / "Jr"
+    has_senior = "senior" in title.lower() or "sr." in title.lower() or "sr " in title.lower()
+    has_junior = "junior" in title.lower() or "jr." in title.lower() or "jr " in title.lower()
+    if years >= 5.0:
+        if has_junior:
+            # Replace Junior/Jr with Senior to avoid "Senior Junior" contradiction
+            title = re.sub(r'\b(junior|jr\.|jr)\b', 'Senior', title, flags=re.IGNORECASE)
+            has_senior = True
+        elif not has_senior:
+            title = f"Senior {title}"
+            has_senior = True
+
+    # Intro generation
+    if intro_idx == 0:
         intro = f"{title} offering {years:.1f} years of experience"
-    elif intro_hash == 1:
+    elif intro_idx == 1:
         intro = f"{years:.1f}-year engineering professional currently working as {title}"
     else:
-        intro = f"Senior {title} with a {years:.1f}-year professional track record"
+        intro = f"{title} with a {years:.1f}-year professional track record"
         
-    # Append company type contexts
+    # Append company type contexts with high variations (Flaw 3 Fix)
+    company = info["consulting_name"] if info["consulting_name"] else "consulting firms"
+    
+    product_vars = [
+        ", offering strong software development background at product companies",
+        ", bringing solid product-building experience in engineering contexts",
+        ", with a strong history of shipping production software rather than consulting",
+        ", offering deep software engineering expertise focused on product scaling",
+        ", demonstrating clean product-focused software development tenure"
+    ]
+    
+    consulting_vars = [
+        f", carrying a mixed background from consulting ({company}) and product development",
+        f", showing a healthy mix of IT services ({company}) and product engineering",
+        f", transitioning from service firms (specifically {company}) to product engineering",
+        f", with a career timeline combining IT consulting at {company} and applied ML",
+        f", possessing solid technical foundations with past consulting background at {company}"
+    ]
+    
+    all_consulting_vars = [
+        f", transitioning from service firms (specifically {company})",
+        f", with experience primarily in IT consulting at {company}",
+        f", looking to transition to product engineering after a services career at {company}",
+        f", with a background centered in IT services and consulting at {company}",
+        f", possessing a service-firm background (specifically {company})"
+    ]
+    
     if info["all_consulting"]:
-        intro += f", transitioning from service firms (specifically {info['consulting_name']})"
+        intro += all_consulting_vars[var_idx]
     elif info["has_consulting"]:
-        intro += f", carrying a mixed background from consulting ({info['consulting_name']}) and product development"
+        intro += consulting_vars[var_idx]
     else:
-        intro += ", offering strong software development background at product companies"
+        intro += product_vars[var_idx]
 
     # 2. Technical Alignment (Module B)
-    # Safe checks to prevent empty parentheses '()'
     core_skills_str = ", ".join(info["core_skills"]) if info["core_skills"] else ""
     adj_skills_str = ", ".join(info["adj_skills"]) if info["adj_skills"] else ""
     
-    skills_hash = hash(core_skills_str + adj_skills_str + str(rank)) % 3
+    skills_idx = (len(core_skills_str) + len(adj_skills_str) + rank) % 3
     
     if core_skills_str and adj_skills_str:
-        if skills_hash == 0:
+        if skills_idx == 0:
             tech = f". Demonstrates hands-on knowledge in {core_skills_str}, backed by solid adjacent depth in {adj_skills_str}."
-        elif skills_hash == 1:
+        elif skills_idx == 1:
             tech = f". Experienced in core competencies like {core_skills_str} alongside adjacent engineering skills including {adj_skills_str}."
         else:
             tech = f". Technical toolkit spans core ML architectures like {core_skills_str} and backend infra tools such as {adj_skills_str}."
     elif core_skills_str:
-        if skills_hash == 0:
+        if skills_idx == 0:
             tech = f". Aligns directly with JD core skills, specifically showing depth in {core_skills_str}."
         else:
             tech = f". Technical background indicates specialized experience with {core_skills_str}."
     elif adj_skills_str:
-        if skills_hash == 0:
+        if skills_idx == 0:
             tech = f". Displays general engineering foundations in {adj_skills_str}, though direct vector-database experience is limited."
         else:
             tech = f". Toolkit centers on adjacent engineering systems like {adj_skills_str}, providing a strong transition baseline."
     else:
         tech = ". Offers general software development skills, though direct ML infrastructure exposure is limited."
 
-    # 3. Constraints & Availability (Module C)
+    # 3. Constraints & Availability (Module C - Flaw 2 Fix: Acknowledge Obvious Gaps/Concerns)
     notice = info["notice_days"]
     reloc = info["relocate"]
     local = info["is_local"]
     resp = info["resp_rate"]
+    avg_tenure = info["avg_tenure"]
     
-    behavior_clauses = []
+    positives = []
+    concerns = []
     
     # Notice Period
-    if notice > 60:
-        behavior_clauses.append(f"notice period of {notice} days is a concern")
-    elif notice <= 30:
-        behavior_clauses.append("availability is ideal (notice period under 30 days)")
+    notice_pos_vars = [
+        "immediate availability (notice period under 30 days)",
+        "ideal notice period of less than 30 days",
+        "quick onboarding timeline (notice period under 30 days)"
+    ]
+    notice_neg_vars = [
+        f"their {notice}-day notice period is a concern for prompt onboarding",
+        f"onboarding might be delayed due to their {notice}-day notice period",
+        f"the {notice}-day notice period presents an onboarding bottleneck"
+    ]
+    if notice <= 30:
+        positives.append(notice_pos_vars[val_hash % len(notice_pos_vars)])
+    else:
+        concerns.append(notice_neg_vars[val_hash % len(notice_neg_vars)])
         
     # Location
+    loc_local_vars = [
+        "based locally in the Pune/Noida region",
+        "located locally in Pune/Noida",
+        "local resident of Pune/Noida"
+    ]
+    loc_reloc_vars = [
+        "willing to relocate to Pune/Noida",
+        "open to relocation to Noida/Pune",
+        "ready to relocate for the role"
+    ]
     if local:
-        behavior_clauses.append("based locally in Pune/Noida")
+        positives.append(loc_local_vars[val_hash % len(loc_local_vars)])
     elif reloc:
-        behavior_clauses.append("willing to relocate to Pune/Noida")
+        positives.append(loc_reloc_vars[val_hash % len(loc_reloc_vars)])
         
     # Responsiveness
-    if resp < 0.3:
-        behavior_clauses.append(f"historical response rate ({resp:.0%}) is low")
-    elif resp >= 0.8:
-        behavior_clauses.append("highly responsive on the platform")
+    resp_pos_vars = [
+        f"highly responsive ({resp:.0%} response rate)",
+        f"strong engagement ({resp:.0%} recruiter reply rate)",
+        f"active on the platform with a {resp:.0%} response rate"
+    ]
+    resp_neg_vars = [
+        f"low platform responsiveness ({resp:.0%} response rate) is a concern",
+        f"their low recruiter reply rate ({resp:.0%}) raises communication concerns",
+        f"historical engagement is low with a {resp:.0%} response rate"
+    ]
+    if resp >= 0.5:
+        positives.append(resp_pos_vars[val_hash % len(resp_pos_vars)])
+    else:
+        concerns.append(resp_neg_vars[val_hash % len(resp_neg_vars)])
         
-    if behavior_clauses:
-        behavior_hash = hash(str(rank) + str(score)) % 2
-        if behavior_hash == 0:
-            behavior = f". Operational notes: {', '.join(behavior_clauses)}."
-        else:
-            behavior = f". In terms of feasibility: {', '.join(behavior_clauses)}."
+    # Average Tenure stability
+    tenure_neg_vars = [
+        f"short average job tenure ({avg_tenure:.1f} months) raises stability concerns",
+        f"frequent job changes (average tenure of {avg_tenure:.1f} months) suggest retention risk",
+        f"job stability is a concern with an average tenure of {avg_tenure:.1f} months"
+    ]
+    if avg_tenure > 0 and avg_tenure < 18:
+        concerns.append(tenure_neg_vars[val_hash % len(tenure_neg_vars)])
+        
+    def join_natural(lst):
+        if not lst:
+            return ""
+        if len(lst) == 1:
+            return lst[0]
+        if len(lst) == 2:
+            return f"{lst[0]} and {lst[1]}"
+        return ", ".join(lst[:-1]) + f", and {lst[-1]}"
+        
+    # Combine positive and concerns
+    behavior = ""
+    if positives or concerns:
+        template_idx = (rank + int(score * 100)) % 3
+        
+        pos_str = join_natural(positives)
+        neg_str = join_natural(concerns)
+        
+        if positives and concerns:
+            if template_idx == 0:
+                behavior = f". Operational signals are positive: {pos_str}. However, {neg_str}."
+            elif template_idx == 1:
+                behavior = f". Feasibility check: {pos_str}. On the downside, {neg_str}."
+            else:
+                behavior = f". Operational highlights include {pos_str}, though {neg_str}."
+        elif concerns:
+            if template_idx == 0:
+                behavior = f". Operational notes: {neg_str}."
+            elif template_idx == 1:
+                behavior = f". Feasibility assessment: {neg_str}."
+            else:
+                behavior = f". Note that {neg_str}."
+        else:  # only positives
+            if template_idx == 0:
+                behavior = f". Operational signals are highly favorable: {pos_str}."
+            elif template_idx == 1:
+                behavior = f". Feasibility metrics are solid: {pos_str}."
+            else:
+                behavior = f". No major operational concerns: {pos_str}."
     else:
         behavior = "."
 
     # 4. Assemble and clean spacing/punctuation
     reasoning = f"{intro}{tech}{behavior}"
-    reasoning = reasoning.replace("..", ".").replace(" .", ".").replace(" ,", ",").replace("  ", " ").strip()
+    reasoning = reasoning.replace("..", ".")
+    reasoning = re.sub(r'\s+\.(?!\w)', '.', reasoning)
+    reasoning = reasoning.replace(".,", ",")
+    reasoning = reasoning.replace(" ,", ",")
+    reasoning = re.sub(r'\s+', ' ', reasoning)
+    reasoning = reasoning.replace("..", ".")
+    reasoning = reasoning.strip()
     
-    # Add rank-specific context prefixes
-    if rank <= 10:
-        reasoning = f"Top-tier recommendation: {reasoning}"
+    # Add rank-specific context prefixes with variation (Flaw 4 Fix)
+    prefix_idx = rank % 4
+    if rank <= 20:
+        top_prefixes = [
+            "Exceptional fit: ",
+            "Highly recommended: ",
+            "Strong candidate: ",
+            "Top-tier recommendation: "
+        ]
+        reasoning = f"{top_prefixes[prefix_idx]}{reasoning}"
     elif rank > 80:
-        reasoning = f"Borderline select: {reasoning}"
+        bottom_prefixes = [
+            "Borderline select: ",
+            "Borderline candidate: ",
+            "Adjacent match: ",
+            "Final roster inclusion: "
+        ]
+        reasoning = f"{bottom_prefixes[prefix_idx]}{reasoning}"
         
     return reasoning
 

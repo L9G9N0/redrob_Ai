@@ -154,6 +154,113 @@ class TestScoring(unittest.TestCase):
         self.assertGreater(score_good, score_poor * 10)
 
 
+class TestReasoningFlaws(unittest.TestCase):
+    """Unit tests to verify resolution of the 4 manual review flaws in reasoning generation."""
+
+    def test_senior_senior_bug(self):
+        # Candidate 1: Experience >= 5, title already contains "Senior"
+        info_already_senior = {
+            "years_exp": 7.5,
+            "current_title": "Senior Machine Learning Engineer",
+            "core_skills": ["RAG", "Python"],
+            "adj_skills": ["Docker"],
+            "notice_days": 15,
+            "is_local": True,
+            "relocate": False,
+            "has_consulting": False,
+            "all_consulting": False,
+            "consulting_name": "",
+            "resp_rate": 0.9,
+            "avg_tenure": 24.0
+        }
+        reasoning = generate_reasoning(rank=1, score=0.85, info=info_already_senior)
+        self.assertNotIn("Senior Senior", reasoning)
+        self.assertIn("Senior Machine Learning Engineer", reasoning)
+
+        # Candidate 2: Experience >= 5, title does NOT contain "Senior"
+        info_no_senior = info_already_senior.copy()
+        info_no_senior["current_title"] = "Machine Learning Engineer"
+        reasoning = generate_reasoning(rank=1, score=0.85, info=info_no_senior)
+        self.assertIn("Senior Machine Learning Engineer", reasoning)
+        self.assertNotIn("Senior Senior", reasoning)
+
+        # Candidate 3: Experience < 5, title does NOT contain "Senior"
+        info_junior = info_already_senior.copy()
+        info_junior["years_exp"] = 3.0
+        info_junior["current_title"] = "Machine Learning Engineer"
+        reasoning = generate_reasoning(rank=1, score=0.85, info=info_junior)
+        self.assertNotIn("Senior Machine Learning Engineer", reasoning)
+        self.assertIn("Machine Learning Engineer", reasoning)
+
+        # Candidate 4: Experience >= 5, title contains "Junior"
+        info_junior_exp = info_already_senior.copy()
+        info_junior_exp["years_exp"] = 6.0
+        info_junior_exp["current_title"] = "Junior ML Engineer"
+        reasoning = generate_reasoning(rank=1, score=0.85, info=info_junior_exp)
+        self.assertNotIn("Junior", reasoning)
+        self.assertIn("Senior ML Engineer", reasoning)
+
+    def test_toxic_positivity_gaps(self):
+        # Candidate with long notice period (>30 days) and low response rate (<50%)
+        info = {
+            "years_exp": 6.0,
+            "current_title": "AI Engineer",
+            "core_skills": ["RAG"],
+            "adj_skills": [],
+            "notice_days": 45,
+            "is_local": True,
+            "relocate": False,
+            "has_consulting": False,
+            "all_consulting": False,
+            "consulting_name": "",
+            "resp_rate": 0.35,
+            "avg_tenure": 12.0 # short tenure concern too
+        }
+        reasoning = generate_reasoning(rank=5, score=0.7, info=info)
+        # Should explicitly acknowledge the gaps/concerns
+        self.assertTrue(
+            "notice period" in reasoning.lower() or "onboarding" in reasoning.lower(),
+            "Notice period concern was not acknowledged."
+        )
+        self.assertTrue(
+            "response rate" in reasoning.lower() or "responsiveness" in reasoning.lower() or "engagement" in reasoning.lower(),
+            "Responsiveness concern was not acknowledged."
+        )
+        self.assertTrue(
+            "tenure" in reasoning.lower() or "stability" in reasoning.lower() or "retention" in reasoning.lower(),
+            "Tenure concern was not acknowledged."
+        )
+        # Verify it has some positive and negative contrast (Toxic Positivity fix)
+        self.assertTrue(
+            "however" in reasoning.lower() or "on the downside" in reasoning.lower() or "though" in reasoning.lower(),
+            "Contrast words (however/though) were not used when concerns exist."
+        )
+
+    def test_prefix_distribution(self):
+        # Verify rank 1 to 20 prefixes are distributed (different openers)
+        info = {
+            "years_exp": 6.0,
+            "current_title": "AI Engineer",
+            "core_skills": ["RAG"],
+            "adj_skills": [],
+            "notice_days": 15,
+            "is_local": True,
+            "relocate": False,
+            "has_consulting": False,
+            "all_consulting": False,
+            "consulting_name": "",
+            "resp_rate": 0.85,
+            "avg_tenure": 24.0
+        }
+        prefixes = set()
+        for r in range(1, 5):
+            reasoning = generate_reasoning(rank=r, score=0.8, info=info)
+            # Find the prefix (starts with capital and ends with colon)
+            prefix = reasoning.split(":")[0] + ":"
+            prefixes.add(prefix)
+        self.assertGreater(len(prefixes), 1, "Top-rank prefixes are not properly distributed.")
+
+
 class TestIntegration(unittest.TestCase):
     """Integration testing: end-to-end dataset pipeline mock check."""
 
