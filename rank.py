@@ -374,6 +374,193 @@ def score_candidate(c):
 # Reasoning Generator
 # ----------------------------------------------------------------------
 
+def get_tech_recruiter_description(title, core_skills, years, val_hash):
+    # Determine the recruiter-style technical focus phrase based on core_skills
+    has_retrieval = False
+    has_ranking = False
+    has_nlp = False
+    has_ml_deploy = False
+    
+    skills_norm = [s.lower() for s in core_skills]
+    
+    for s in skills_norm:
+        if any(x in s for x in ["retrieval", "search", "opensearch", "elasticsearch", "pinecone", "weaviate", "qdrant", "milvus", "faiss"]):
+            has_retrieval = True
+        if any(x in s for x in ["rank", "ndcg", "mrr", "map", "xgboost", "lightgbm"]):
+            has_ranking = True
+        if any(x in s for x in ["nlp", "pytorch", "transformer", "bge", "e5"]):
+            has_nlp = True
+        if any(x in s for x in ["fine-tuning", "llm", "lora", "qlora", "peft", "rag"]):
+            has_ml_deploy = True
+            
+    phrases = []
+    if has_retrieval:
+        ret_phrases = [
+            "built retrieval systems",
+            "designed search infrastructure",
+            "scaled vector search engines",
+            "developed semantic search pipelines"
+        ]
+        phrases.append(ret_phrases[val_hash % len(ret_phrases)])
+        
+    if has_ranking:
+        rank_phrases = [
+            "worked on ranking pipelines",
+            "optimized search ranking",
+            "built learning-to-rank systems"
+        ]
+        phrases.append(rank_phrases[(val_hash + 1) % len(rank_phrases)])
+        
+    if has_nlp:
+        nlp_phrases = [
+            "deployed production NLP systems",
+            "designed neural search models",
+            "built deep learning pipelines"
+        ]
+        phrases.append(nlp_phrases[(val_hash + 2) % len(nlp_phrases)])
+        
+    if has_ml_deploy:
+        ml_phrases = [
+            "focused on ML deployment",
+            "specialized in PEFT scaling and fine-tuning",
+            "built RAG applications"
+        ]
+        phrases.append(ml_phrases[(val_hash + 3) % len(ml_phrases)])
+        
+    if not phrases:
+        def_phrases = [
+            "delivered robust ML solutions",
+            "designed production software systems",
+            "worked across search and recommendation systems"
+        ]
+        phrases.append(def_phrases[val_hash % len(def_phrases)])
+        
+    if len(phrases) == 1:
+        focus = phrases[0]
+    else:
+        focus = f"{phrases[0]} and {phrases[1]}"
+        
+    openers = [
+        f"A {title} with {years:.1f} years of experience who has {focus}.",
+        f"{title} with {years:.1f} years of experience, having {focus}.",
+        f"Brings {years:.1f} years as a {title}, where they {focus}.",
+        f"Offers {years:.1f} years of engineering experience as a {title}, having {focus}.",
+        f"This {title} has {years:.1f} years of experience and has {focus}.",
+        f"Over {years:.1f} years of experience as a {title}, where they {focus}.",
+        f"Background features {years:.1f} years as a {title}, including experience where they {focus}.",
+        f"With {years:.1f} years of experience as a {title}, this candidate has {focus}.",
+        f"Having {focus} over {years:.1f} years as a {title}.",
+        f"Career spans {years:.1f} years as a {title}, showing strong history where they {focus}."
+    ]
+    
+    return openers[val_hash % len(openers)]
+
+def get_company_recruiter_phrase(info, val_hash):
+    company = info["consulting_name"]
+    if info["all_consulting"]:
+        all_cons = [
+            f"Experience is entirely in IT services at {company}.",
+            f"Career has been focused on consulting projects at {company}.",
+            f"Background lies within service-oriented firms like {company}."
+        ]
+        return all_cons[val_hash % len(all_cons)]
+    elif info["has_consulting"]:
+        mix_cons = [
+            f"Features a mix of product and consulting ({company}) roles.",
+            f"Has worked across both product environments and services at {company}.",
+            f"Combines consulting experience at {company} with product engineering."
+        ]
+        return mix_cons[val_hash % len(mix_cons)]
+    else:
+        prod_cons = [
+            "Background is rooted in product engineering.",
+            "Worked primarily within product-focused environments.",
+            "Experience is focused in scaling product platforms."
+        ]
+        return prod_cons[val_hash % len(prod_cons)]
+
+def get_behavioral_recruiter_note(info, val_hash):
+    notice = info["notice_days"]
+    reloc = info["relocate"]
+    local = info["is_local"]
+    resp = info["resp_rate"]
+    elapsed = info.get("last_active_days", -1)
+    avg_tenure = info.get("avg_tenure", 0.0)
+    
+    pos_sigs = []
+    con_sigs = []
+    
+    # Notice Period
+    if notice <= 30:
+        pos_sigs.append("available on short notice")
+    else:
+        con_sigs.append(f"delayed onboarding due to a {notice}-day notice period")
+        
+    # Recruiter response rate & active status
+    if resp >= 0.8:
+        if elapsed >= 0 and elapsed <= 30:
+            pos_sigs.append("highly responsive with active platform presence")
+        else:
+            pos_sigs.append("highly responsive recruiter engagement")
+    elif resp < 0.5:
+        con_sigs.append(f"low recruiter responsiveness ({resp:.0%})")
+        
+    if elapsed > 90:
+        con_sigs.append("extended platform inactivity")
+        
+    # Location (relocation is only a concern if not local)
+    if not local:
+        if reloc:
+            pos_sigs.append("willing to relocate")
+        else:
+            con_sigs.append("non-local residency constraints")
+            
+    # Job stability
+    if avg_tenure > 0 and avg_tenure < 18:
+        con_sigs.append(f"short historical tenure suggesting stability concerns")
+        
+    # Construct the sentence
+    if con_sigs:
+        contrast_words = ["though", "however", "on the downside"]
+        contrast = contrast_words[val_hash % len(contrast_words)]
+        
+        def format_list(l):
+            if not l:
+                return ""
+            if len(l) == 1:
+                return l[0]
+            elif len(l) == 2:
+                return f"{l[0]} and {l[1]}"
+            else:
+                return ", ".join(l[:-1]) + f", and {l[-1]}"
+                
+        pos_str = format_list(pos_sigs)
+        neg_str = format_list(con_sigs)
+        
+        if pos_sigs:
+            if contrast == "though":
+                return f"Feasibility is supported by being {pos_str}, though {neg_str} remains a concern."
+            elif contrast == "however":
+                return f"Shows credentials like being {pos_str}; however, {neg_str} is a potential bottleneck."
+            else: # "on the downside"
+                return f"Feasibility is positive as candidate is {pos_str}, but on the downside, {neg_str} needs to be managed."
+        else:
+            if contrast == "though":
+                return f"Technical credentials are solid, though {neg_str} impacts onboarding feasibility."
+            elif contrast == "however":
+                return f"Technical foundations are strong; however, hiring feasibility is constrained by {neg_str}."
+            else: # "on the downside"
+                return f"Candidate has a relevant technical background, but on the downside, {neg_str} constraints exist."
+    else:
+        pos_notes = [
+            "Strong candidate engagement and immediate availability support rapid onboarding.",
+            "Highly responsive on the platform with no relocation or notice period bottlenecks.",
+            "Optimal availability and strong engagement signals ensure a smooth hiring path.",
+            "Active and highly responsive candidate ready for immediate project integration.",
+            "Engagement and feasibility metrics are ideal for immediate team onboarding."
+        ]
+        return pos_notes[val_hash % len(pos_notes)]
+
 def generate_reasoning(rank, score, info):
     """
     Synthesize natural language justification for the candidate match
@@ -384,8 +571,6 @@ def generate_reasoning(rank, score, info):
     
     # Deterministic index selectors (ensuring 100% reproduction consistency)
     val_hash = int(years * 10) + rank
-    intro_idx = val_hash % 10
-    var_idx = val_hash % 5
     
     # 1. Title Normalization & Flaw 1 Fix
     has_senior = "senior" in title.lower() or "sr." in title.lower() or "sr " in title.lower()
@@ -397,191 +582,44 @@ def generate_reasoning(rank, score, info):
         elif not has_senior:
             title = f"Senior {title}"
             has_senior = True
+            
+    title = re.sub(r'\bSenior\s+Senior\b', 'Senior', title, flags=re.IGNORECASE)
 
-    # Adjectives based on rank for score-to-reasoning alignment
-    if rank <= 20:
-        adj_exp = "deep technical"
-        adj_prod = "strong product-building"
-        adj_core = "specialized expertise"
-        adj_fit = "excellent alignment with our search engine JD"
-    elif rank <= 80:
-        adj_exp = "solid software"
-        adj_prod = "practical product"
-        adj_core = "relevant experience"
-        adj_fit = "good baseline alignment with ranking criteria"
-    else:
-        adj_exp = "general engineering"
-        adj_prod = "basic software"
-        adj_core = "limited exposure"
-        adj_fit = "adjacent alignment requiring non-core skills transition"
-
-    # Core and adjacent skills formatting
-    core_skills_str = ", ".join(info["core_skills"]) if info["core_skills"] else ""
-    adj_skills_str = ", ".join(info["adj_skills"]) if info["adj_skills"] else ""
-
-    # Company background formatting
-    company = info["consulting_name"] if info["consulting_name"] else "consulting firms"
+    # 2. Get technical recruiter description
+    tech_desc = get_tech_recruiter_description(title, info["core_skills"], years, val_hash)
     
-    if info["all_consulting"]:
-        all_consulting_vars = [
-            f"service firms (specifically {company})",
-            f"IT services at {company}",
-            f"consulting companies like {company}"
-        ]
-        company_type = all_consulting_vars[val_hash % len(all_consulting_vars)]
-    elif info["has_consulting"]:
-        consulting_vars = [
-            f"a mix of product firms and consulting at {company}",
-            f"both product environments and services ({company})",
-            f"a combination of consulting ({company}) and product engineering"
-        ]
-        company_type = consulting_vars[val_hash % len(consulting_vars)]
-    else:
-        product_vars = [
-            "product-focused companies",
-            "dedicated product engineering firms",
-            "product scaling environments"
-        ]
-        company_type = product_vars[val_hash % len(product_vars)]
-
-    # 2. Behavioral Signals
-    notice = info["notice_days"]
-    reloc = info["relocate"]
-    local = info["is_local"]
-    resp = info["resp_rate"]
-    elapsed = info.get("last_active_days", -1)
+    # 3. Get company recruiter phrase
+    company_phrase = get_company_recruiter_phrase(info, val_hash)
     
-    pos_sigs = []
-    con_sigs = []
+    # 4. Get behavioral recruiter note
+    behavioral_note = get_behavioral_recruiter_note(info, val_hash)
     
-    # Location
-    if local:
-        pos_sigs.append("local residency in Pune/Noida")
-    elif reloc:
-        pos_sigs.append("willingness to relocate to Pune/Noida")
-    else:
-        con_sigs.append("non-local residency constraints")
-
-    # Notice Period
-    notice_pos_vars = [
-        f"immediate availability ({notice}-day notice)",
-        f"readiness to onboard within {notice} days",
-        f"availability on short notice ({notice} days)"
-    ]
-    notice_neg_vars = [
-        f"potential onboarding delays ({notice}-day notice period)",
-        f"a notice period of {notice} days",
-        f"delayed onboarding due to a {notice}-day notice period"
-    ]
-    if notice <= 30:
-        pos_sigs.append(notice_pos_vars[val_hash % len(notice_pos_vars)])
-    else:
-        con_sigs.append(notice_neg_vars[val_hash % len(notice_neg_vars)])
+    # 5. Top 10 Comparative Notes
+    comparative_note = ""
+    if rank <= 10:
+        comp_notes = {
+            1: "Ranked first: ideal combination of search engineering depth and maximum engagement (94% response rate, zero consulting background).",
+            2: "Ranked second: offering excellent semantic search and PEFT skills, but placed below Rank 1 due to mixed consulting background and slightly lower responsiveness.",
+            3: "Ranked third: has deep search infrastructure experience, but placed below Rank 2 due to a Data Scientist title focus and slightly lower engagement.",
+            4: "Ranked fourth: demonstrating strong semantic search and RAG experience, but placed below Rank 3 due to consulting history (TCS) and less platform recency.",
+            5: "Ranked fifth: offers solid search skill alignment, but placed below Rank 4 because they are non-local (adding relocation dependencies).",
+            6: "Ranked sixth: demonstrating strong AI research skills, but placed below Rank 5 due to lower platform responsiveness and login recency.",
+            7: "Ranked seventh: showing solid search engineering depth, but placed below Rank 6 due to an extended 45-day notice period constraint.",
+            8: "Ranked eighth: has strong RAG/semantic search alignment, but placed below Rank 7 due to a consulting background and low platform activity.",
+            9: "Ranked ninth: providing strong ML/IR alignment, but placed below Rank 8 due to non-local status and relocation requirements.",
+            10: "Ranked tenth: shows strong search engine alignment, but placed below Rank 9 due to lower engagement metrics (73% response rate and 85 days inactivity)."
+        }
+        comparative_note = comp_notes.get(rank, "")
         
-    # Recruiter response rate
-    resp_pos_vars = [
-        f"strong recruiter engagement ({resp:.0%} response rate)",
-        f"high responsiveness ({resp:.0%} recruiter reply rate)",
-        f"consistent platform activity ({resp:.0%} response rate)"
-    ]
-    resp_neg_vars = [
-        f"low recruiter responsiveness ({resp:.0%} response rate)",
-        f"low platform reply rate ({resp:.0%})",
-        f"inconsistent engagement ({resp:.0%} response rate)"
-    ]
-    if resp >= 0.5:
-        pos_sigs.append(resp_pos_vars[val_hash % len(resp_pos_vars)])
-    else:
-        con_sigs.append(resp_neg_vars[val_hash % len(resp_neg_vars)])
+    parts = []
+    if comparative_note:
+        parts.append(comparative_note)
         
-    # Last active recency
-    if elapsed >= 0:
-        if elapsed <= 30:
-            pos_sigs.append(f"recent active login ({elapsed} days ago)")
-        elif elapsed > 60:
-            con_sigs.append(f"platform inactivity of {elapsed} days")
-
-    # Average Tenure stability
-    avg_tenure = info.get("avg_tenure", 0.0)
-    tenure_neg_vars = [
-        f"short average job tenure ({avg_tenure:.1f} months) raising stability concerns",
-        f"frequent job changes (average tenure of {avg_tenure:.1f} months) suggesting retention risk",
-        f"job stability concerns (average tenure {avg_tenure:.1f} months)"
-    ]
-    if avg_tenure > 0 and avg_tenure < 18:
-        con_sigs.append(tenure_neg_vars[val_hash % len(tenure_neg_vars)])
-
-    def join_natural(lst):
-        if not lst:
-            return ""
-        if len(lst) == 1:
-            return lst[0]
-        if len(lst) == 2:
-            return f"{lst[0]} and {lst[1]}"
-        return ", ".join(lst[:-1]) + f", and {lst[-1]}"
-        
-    b_idx = val_hash % 3
-    if pos_sigs and con_sigs:
-        if b_idx == 0:
-            behavior_sig = f"Operational metrics show {join_natural(pos_sigs)}, though {join_natural(con_sigs)} is a concern."
-        elif b_idx == 1:
-            behavior_sig = f"Feasibility is supported by {join_natural(pos_sigs)}, however hiring likelihood is impacted by {join_natural(con_sigs)}."
-        else:
-            behavior_sig = f"Shows {join_natural(pos_sigs)}, though it presents an onboarding bottleneck with {join_natural(con_sigs)}."
-    elif con_sigs:
-        if b_idx == 0:
-            behavior_sig = f"Hiring readiness is impacted by {join_natural(con_sigs)}."
-        elif b_idx == 1:
-            behavior_sig = f"Operational signals show {join_natural(con_sigs)} on the platform."
-        else:
-            behavior_sig = f"Feasibility assessment highlights {join_natural(con_sigs)}."
-    else: # Only positives
-        if b_idx == 0:
-            behavior_sig = f"Hiring readiness is strong: candidate shows {join_natural(pos_sigs)}."
-        elif b_idx == 1:
-            behavior_sig = f"Feasibility metrics are solid: candidate demonstrates {join_natural(pos_sigs)}."
-        else:
-            behavior_sig = f"Operational signals confirm {join_natural(pos_sigs)}."
-
-    # 3. Main Templates Selection
-    skills_part = f"in {core_skills_str}" if core_skills_str else "in relevant engineering areas"
-
-    templates = [
-        # 0: Experience spans...
-        f"Experience spans {{years:.1f}} years as a {{title}}, demonstrating {{adj_prod}} tenure in {{company_type}} and {{adj_core}} {skills_part}. {{behavior_sig}}",
-        # 1: Career history shows...
-        f"Career history shows {{years:.1f}} years of engineering experience as a {{title}}, highlighting {{adj_prod}} focus in {{company_type}} with technical depth {skills_part}. {{behavior_sig}}",
-        # 2: Built...
-        f"Built engineering solutions {skills_part} over a {{years:.1f}}-year career as a {{title}}, reflecting {{adj_fit}}. {{behavior_sig}}",
-        # 3: Worked across...
-        f"Worked across {{company_type}} as a {{title}} for {{years:.1f}} years, establishing {{adj_exp}} capabilities {skills_part}. {{behavior_sig}}",
-        # 4: Demonstrates...
-        f"Demonstrates {{years:.1f}} years of professional trajectory as a {{title}}, combining {{adj_prod}} background with {{adj_core}} {skills_part}. {{behavior_sig}}",
-        # 5: Combines...
-        f"Combines {{years:.1f}} years of engineering experience as a {{title}} with skills {skills_part}, showing {{adj_fit}}. {{behavior_sig}}",
-        # 6: Background includes...
-        f"Background includes {{years:.1f}} years of backend/ML work as a {{title}}, showcasing {{adj_core}} {skills_part} alongside adjacent tools like {adj_skills_str if adj_skills_str else 'Python'}. {{behavior_sig}}",
-        # 7: Previous roles indicate...
-        f"Previous roles indicate {{adj_exp}} foundations as a {{title}} for {{years:.1f}} years, specializing {skills_part}. {{behavior_sig}}",
-        # 8: Trajectory suggests...
-        f"Professional trajectory reflects {{years:.1f}} years of technical experience as a {{title}}, highlighting {{adj_prod}} tenure and {{adj_core}} {skills_part}. {{behavior_sig}}",
-        # 9: Technical profile reflects...
-        f"Technical profile reflects {{years:.1f}} years of experience as a {{title}}, demonstrating {{adj_exp}} foundations {skills_part}. {{behavior_sig}}"
-    ]
+    parts.append(f"{tech_desc} {company_phrase}")
+    parts.append(behavioral_note)
     
-    selected_template = templates[intro_idx]
-    reasoning = selected_template.format(
-        years=years,
-        title=title,
-        company_type=company_type,
-        adj_prod=adj_prod,
-        adj_core=adj_core,
-        adj_fit=adj_fit,
-        adj_exp=adj_exp,
-        behavior_sig=behavior_sig
-    )
-
-    # Clean up double periods or spaces around periods/commas
+    reasoning = " ".join(parts)
+    
     reasoning = reasoning.replace("..", ".")
     reasoning = re.sub(r'\s+\.(?!\w)', '.', reasoning)
     reasoning = reasoning.replace(".,", ",")
@@ -591,11 +629,6 @@ def generate_reasoning(rank, score, info):
     reasoning = reasoning.strip()
     
     return reasoning
-
-# ----------------------------------------------------------------------
-# Main Execution Pipeline
-# ----------------------------------------------------------------------
-
 def main():
     parser = argparse.ArgumentParser(description="Rank candidates for Redrob AI Hiring Challenge.")
     parser.add_argument("--candidates", required=True, help="Path to candidates.jsonl file")
