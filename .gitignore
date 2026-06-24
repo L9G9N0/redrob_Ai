@@ -1,0 +1,26 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# OS-specific files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Large datasets (exceeding Git/GitHub limits)
+candidates.jsonl
+candidates.jsonl.gz
+sample_candidates.json
+
+# Local output files
+team_redrob.csv
+team_test.csv
+*.csv
+
+# Exceptions
+!sample_submission.csv

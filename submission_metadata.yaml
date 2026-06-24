@@ -1,0 +1,46 @@
+# Redrob Hackathon — Submission Metadata
+team_name: "Team Antigravity"
+
+primary_contact:
+  name: "Legend"
+  email: "legend@example.com"
+  phone: "+91-9876543210"
+
+team_members:
+  - name: "Legend"
+    email: "legend@example.com"
+    role: "Lead AI Engineer"
+
+github_repo: "https://github.com/L9G9N0/redrob_Ai"
+sandbox_link: "https://huggingface.co/spaces/legend27648/redrob-ranker"
+reproduce_command: "python3 rank.py --candidates ./candidates.jsonl --out ./team_redrob.csv"
+
+compute:
+  platform: "MacBook Pro M2"
+  cpu_cores: 8
+  ram_gb: 16
+  python_version: "3.11.4"
+  os: "macOS 14.2"
+  uses_gpu_for_inference: false
+  has_network_during_ranking: false
+  pre_computation_required: false
+  pre_computation_time_minutes: 0
+
+ai_tools_used:
+  - "Gemini"
+  - "Claude"
+
+ai_usage_summary: |
+  Used Gemini for code design and architectural review. No candidate data was exposed to any external web APIs.
+
+methodology_summary: |
+  Heuristic candidate ranker with logical checks to eliminate keyword-stuffed and honeypot profiles.
+  The scoring combines technical alignment (role titles, core skills duration/endorsements, company background) with multiplicative platform engagement and constraint factors (notice period, location hybrid-fit, salary bounds).
+  Ensures deterministic, lexicographically sorted tie-breaks. Runs in under 30 seconds for 100K candidate profiles.
+
+declarations:
+  read_submission_spec: true
+  code_is_original_work: true
+  no_collusion: true
+  honeypot_check_done: true
+  reproduction_tested: true

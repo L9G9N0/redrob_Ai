@@ -1,0 +1,5 @@
+# Redrob AI Candidate Ranker Requirements
+# This implementation relies entirely on the Python Standard Library.
+# No external package dependencies are required, ensuring zero installation overhead
+# and 100% reproducibility in sandbox environments.
+# Tested on Python 3.8, 3.9, 3.10, and 3.11.
